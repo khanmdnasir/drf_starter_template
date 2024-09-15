@@ -51,7 +51,7 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
-
+    "core",
 ]
 
 INSTALLED_APPS = DEFAULT_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -102,6 +102,16 @@ DATABASES = {
         "PORT": 5432,
     }
 }
+
+# settings.py
+
+MONGODB_SETTINGS = {
+    "db_name": os.getenv("DB_NAME"),
+    "db_username": os.getenv("DB_USER"),
+    "db_password": os.getenv("DB_PASSWORD"),
+    "db_cluster_url": os.getenv("DB_CLUSTER_URL"),
+}
+
 
 
 # Password validation
