@@ -2,3 +2,7 @@ Django
 djangorestframework
 python-dotenv
 psycopg2-binary
+django-extensions
+django-filter
+django-cors-headers
+django-reversion
