@@ -6,3 +6,4 @@ django-extensions
 django-filter
 django-cors-headers
 django-reversion
+django-allauth
