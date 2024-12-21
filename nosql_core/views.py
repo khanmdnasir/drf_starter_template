@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from typing import Type, TypeVar, Generic
 from pydantic import BaseModel
-from core.services import BaseService
+from nosql_core.services import BaseService
 from pydantic import ValidationError
 from bson import ObjectId
 
