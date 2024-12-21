@@ -12,7 +12,7 @@ T = TypeVar('T', bound=BaseModel)
 class BaseService(ABC, Generic[T]):
     def __init__(self, collection_name: str):
         self.client = MongoClient(
-            f"mongodb+srv://{settings.MONGODB_SETTINGS['db_user']}:{settings.MONGODB_SETTINGS['db_password']}@{settings.MONGODB_SETTINGS['db_cluster_url']}/?retryWrites=true&w=majority",
+            f"mongodb+srv://{settings.NOSQL_SETTINGS['db_user']}:{settings.NOSQL_SETTINGS['db_password']}@{settings.NOSQL_SETTINGS['db_cluster_url']}/?retryWrites=true&w=majority",
             tlsCAFile=certifi.where())
         self.db = self.client[settings.MONGODB_SETTINGS['db_name']]
         self.collection = self.db[collection_name]

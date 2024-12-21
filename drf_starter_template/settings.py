@@ -105,11 +105,11 @@ DATABASES = {
 
 # settings.py
 
-MONGODB_SETTINGS = {
-    "db_name": os.getenv("DB_NAME"),
-    "db_username": os.getenv("DB_USER"),
-    "db_password": os.getenv("DB_PASSWORD"),
-    "db_cluster_url": os.getenv("DB_CLUSTER_URL"),
+NOSQL_SETTINGS = {
+    "db_name": os.getenv("NOSQL_DB_NAME"),
+    "db_username": os.getenv("NOSQL_DB_USER"),
+    "db_password": os.getenv("NOSQL_DB_PASSWORD"),
+    "db_cluster_url": os.getenv("NOSQL_DB_CLUSTER_URL"),
 }
 
 
