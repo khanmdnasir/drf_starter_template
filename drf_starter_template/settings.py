@@ -51,6 +51,7 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
+    "core",
     "nosql_core",
 ]
 
