@@ -6,3 +6,6 @@ django-extensions
 django-filter
 django-cors-headers
 django-reversion
+pymongo
+certifi
+pydantic
