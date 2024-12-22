@@ -9,3 +9,5 @@ django-reversion
 pymongo
 certifi
 pydantic
+djangorestframework-simplejwt
+"django-phonenumber-field[phonenumbers]"
