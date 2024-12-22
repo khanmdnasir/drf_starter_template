@@ -86,7 +86,10 @@ class BaseModelView(BaseView):
         Handles the core logic for processing post requests.
         """
         # Pre-modification
-        data = self.service_class.pre_modification(request)
+        if self.service_class and hasattr(self.service_class, 'pre_modification'):
+            data = self.service_class.pre_modification(request)
+        else:
+            data = request.data
 
         # Serializer Validation
         serializer = self.serializer_class(data=data)
@@ -96,7 +99,10 @@ class BaseModelView(BaseView):
         serializer.save()
 
         # Post-modification
-        return self.service_class.post_modification(serializer.data)
+        if self.service_class and hasattr(self.service_class, 'post_modification'):
+            return self.service_class.post_modification(serializer.data)
+        else:
+            return serializer.data
 
     def post(self, request, **kwargs):
         """
@@ -164,7 +170,10 @@ class BasePostView(BaseView):
         Handles the core logic for processing post requests.
         """
         # Pre-modification
-        data = self.service_class.pre_modification(request)
+        if self.service_class and hasattr(self.service_class, 'pre_modification'):
+            data = self.service_class.pre_modification(request)
+        else:
+            data = request.data
 
         # Serializer Validation
         serializer = self.serializer_class(data=data)
@@ -174,7 +183,10 @@ class BasePostView(BaseView):
         serializer.save()
 
         # Post-modification
-        return self.service_class.post_modification(serializer.data)
+        if self.service_class and hasattr(self.service_class, 'post_modification'):
+            return self.service_class.post_modification(serializer.data)
+        else:
+            return serializer.data
 
     def post(self, request, **kwargs):
         with self.handle_exceptions():
