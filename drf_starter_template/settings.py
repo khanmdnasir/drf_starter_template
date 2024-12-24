@@ -36,8 +36,6 @@ if DEBUG:
 else:
     CORS_ORIGIN_WHITELIST = [x.strip() for x in os.getenv("CORS_ORIGIN_WHITELIST").split(",")]
 
-AUTH_USER_MODEL = "user.User"
-
 
 # Application definition
 
@@ -53,8 +51,6 @@ DEFAULT_APPS = [
 THIRD_PARTY_APPS = [
     "rest_framework",
     "corsheaders",
-    "django_extensions",
-    "reversion",
     "django_filters",
     "phonenumber_field"
 ]
@@ -105,16 +101,15 @@ WSGI_APPLICATION = 'drf_starter_template.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv("DATABASE_NAME"),
-        "USER": os.getenv("DATABASE_USER"),
-        "PASSWORD": os.getenv("DATABASE_PASSWORD"),
-        "HOST": os.getenv("DATABASE_HOST"),
-        "PORT": 5432,
+        'ENGINE': os.getenv("DB_ENGINE", "django.db.backends.sqlite3"),
+        'NAME': os.getenv("DB_NAME", os.path.join(BASE_DIR, 'db.sqlite3')),
+        "USER": os.getenv("DB_USER", ""),
+        "PASSWORD": os.getenv("DB_PASSWORD", ""),
+        "HOST": os.getenv("DB_HOST", "localhost"),
+        "PORT": os.getenv("DB_PORT", ""),
     }
 }
 
-# settings.py
 
 NOSQL_SETTINGS = {
     "db_name": os.getenv("NOSQL_DB_NAME"),
@@ -143,6 +138,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# for authentication
+AUTH_USER_MODEL = "user.User"
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.DjangoModelPermissions'
@@ -211,3 +208,5 @@ MEDIA_URL = "/files-storage/"
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+FRONTEND_URL = os.getenv("FRONTEND_URL")

@@ -1,13 +1,30 @@
+# for django initial setup
 Django
 djangorestframework
 python-dotenv
-psycopg2-binary
-django-extensions
-django-filter
 django-cors-headers
-django-reversion
+
+# for postgres
+psycopg2-binary
+
+# for mysql
+mysqlclient
+
+# for nosql
 pymongo
 certifi
 pydantic
+
+# for jwt
 djangorestframework-simplejwt
+
+# for phone number
 "django-phonenumber-field[phonenumbers]"
+
+# for image
+Pillow
+
+# extra
+django-extensions
+django-filter
+django-reversion

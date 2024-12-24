@@ -1,20 +1,21 @@
-from django.urls import path, include
-from .views import *
-from rest_framework import routers
+from django.urls import path
+from user.views import (
+    LoginView,
+    UserView,
+    ProfileUpdateView,
+    ChangePasswordView,
+    PasswordResetRequestView,
+    PasswordResetView
+)
 from rest_framework_simplejwt.views import TokenRefreshView
-
-router = routers.DefaultRouter()
-router.register('users',UserViewSet)
-# router.register('permission',PermissionViewSet)
-# router.register('groups',GroupViewSet)
 
 
 urlpatterns = [
-    path('', include(router.urls)),
-    # path('user_role/',UserRoleApi.as_view()),
-    # path('update_profile/',update_profile),
-    # path('change_password/',change_password),
     path('auth/', LoginView.as_view()),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    # path('password_reset/', include('django_rest_passwordreset.urls', namespace='password_reset')),
+    path("users/", UserView.as_view(), name="users"),
+    path("profile/update/", ProfileUpdateView.as_view(), name="profile-update"),
+    path('profile/change-password/',ChangePasswordView.as_view(), name="change-password"),
+    path("password-reset-request/", PasswordResetRequestView.as_view(), name="password-reset-request"),
+    path("password-reset/", PasswordResetView.as_view(), name="password-reset"),
 ]

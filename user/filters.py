@@ -1,7 +1,6 @@
 from django_filters import rest_framework as filters
-from django.db.models import Value as V, Q
+from django.db.models import Value as V
 from django.db.models.functions import Concat
-from django.db.models import Count
 from django.contrib.auth.models import Group
 
 

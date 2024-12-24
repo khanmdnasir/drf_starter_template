@@ -1,85 +1,51 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
-from rest_framework.pagination import LimitOffsetPagination
-from core.exceptions import CustomException
+from rest_framework.decorators import action
+from core.exceptions import handle_exceptions
 
 
-class BaseView(APIView):
-    @staticmethod
-    def handle_exceptions(serializer=None):
-        """
-        Handle exceptions for the request lifecycle.
-        """
-        try:
-            yield  # Execute the main logic
-        except ValidationError as e:
-            return Response(
-                {
-                    "success": False,
-                    "error_type": "validation",
-                    "errors": [
-                        {str(key): str(value[0])} for key, value in serializer.errors.items()
-                    ] if serializer else str(e)
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except CustomException as e:
-            return Response(
-                {
-                    "success": False,
-                    "error_type": "custom",
-                    "errors": e.detail
-                },
-                status=e.status_code
-            )
-        except Exception as e:
-            return Response(
-                {
-                    "success": False,
-                    "error_type": "server",
-                    "errors": "Server error"
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
-class BaseModelView(BaseView):
+class BaseModelView(APIView):
     queryset = None
     serializer_class = None
     service_class = None
     filterset_class = None
-    pagination_class = LimitOffsetPagination
+    pagination_class = None
 
-    def get_queryset(self, request):
+    def get_queryset(self):
         """
         Returns a filtered and paginated queryset.
         """
-        filterset = self.filterset_class(request.GET, queryset=self.queryset) if self.filterset_class else self.queryset
-        return filterset.qs if hasattr(filterset, 'qs') else self.queryset
+        if self.queryset is None:
+            raise AttributeError(f"{self.__class__.__name__} should include a `queryset` attribute.")
 
-    def paginate_queryset(self, queryset, request):
+        queryset = self.queryset
+        if self.filterset_class:
+            filterset = self.filterset_class(self.request.GET, queryset=queryset)
+            return filterset.qs if hasattr(filterset, 'qs') else queryset
+        return queryset
+
+    def paginate_queryset(self, queryset):
         """
         Paginates the queryset if a pagination class is defined.
         """
         paginator = self.pagination_class()
-        paginated_queryset = paginator.paginate_queryset(queryset, request)
+        paginated_queryset = paginator.paginate_queryset(queryset, self.request)
         return paginator, paginated_queryset
 
+    @handle_exceptions
     def get(self, request, **kwargs):
         """
         Handles GET requests with optional filtering and pagination.
         """
-        with self.handle_exceptions():
-            queryset = self.get_queryset(request)
-            if self.pagination_class:
-                paginator, paginated_queryset = self.paginate_queryset(queryset, request)
-                serializer = self.serializer_class(paginated_queryset, many=True)
-                return paginator.get_paginated_response(serializer.data)
+        queryset = self.get_queryset()
+        if self.pagination_class:
+            paginator, paginated_queryset = self.paginate_queryset(queryset)
+            serializer = self.serializer_class(paginated_queryset, many=True)
+            return paginator.get_paginated_response(serializer.data)
 
-            serializer = self.serializer_class(queryset, many=True)
-            return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
+        serializer = self.serializer_class(queryset, many=True)
+        return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
 
     def process_post_request(self, request):
         """
@@ -104,22 +70,21 @@ class BaseModelView(BaseView):
         else:
             return serializer.data
 
+    @handle_exceptions
     def post(self, request, **kwargs):
         """
         Handles POST requests.
         """
-        with self.handle_exceptions():
-            response_data = self.process_post_request(request)
-            return Response(
-                {"success": True, "data": response_data},
-                status=status.HTTP_201_CREATED
-            )
+        response_data = self.process_post_request(request)
+        return Response(
+            {"success": True, "data": response_data},
+            status=status.HTTP_201_CREATED
+        )
 
     def process_patch_request(self, instance, request):
         """
         Handles the core logic for processing post requests.
         """
-
         # Serializer Validation
         serializer = self.serializer_class(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -130,37 +95,45 @@ class BaseModelView(BaseView):
         # Post-modification
         return serializer.data
 
+    @handle_exceptions
     def patch(self, request, **kwargs):
         """
         Handles PUT requests.
         """
-        with self.handle_exceptions():
-            instance = self.queryset.get(id=kwargs.get("id"))
-            response_data = self.process_patch_request(instance, request)
-            return Response(
-                {"success": True, "data": response_data},
-                status=status.HTTP_201_CREATED
-            )
+        instance = self.queryset.get(id=kwargs.get("id"))
+        response_data = self.process_patch_request(instance, request)
+        return Response(
+            {"success": True, "data": response_data},
+            status=status.HTTP_201_CREATED
+        )
 
+    @handle_exceptions
     def delete(self, request, **kwargs):
-        with self.handle_exceptions():
-            instance = self.queryset.get(id=kwargs.get("id"))
-            instance.delete()
-            return Response({"success": True}, status=status.HTTP_200_OK)
+        instance = self.queryset.get(id=kwargs.get("id"))
+        instance.delete()
+        return Response({"success": True}, status=status.HTTP_200_OK)
+
+    @action(methods=['patch'], detail=True, url_path='update-status')
+    @handle_exceptions
+    def update_status(self, request, pk):
+        instance = self.queryset.get(id=pk)
+        instance.is_active = not instance.is_active
+        instance.save()
+        return Response({"success": True}, status=status.HTTP_200_OK)
 
 
-class BaseDetailView(BaseView):
+class BaseDetailView(APIView):
     queryset = None
     serializer_class = None
 
+    @handle_exceptions
     def get(self, request, **kwargs):
-        with self.handle_exceptions():
-            instance = self.queryset.get(id=kwargs.get("id"))
-            serializer = self.serializer_class(instance)
-            return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
+        instance = self.queryset.get(id=kwargs.get("id"))
+        serializer = self.serializer_class(instance)
+        return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
 
 
-class BasePostView(BaseView):
+class BasePostView(APIView):
     queryset = None
     serializer_class = None
     service_class = None
@@ -188,20 +161,20 @@ class BasePostView(BaseView):
         else:
             return serializer.data
 
+    @handle_exceptions
     def post(self, request, **kwargs):
-        with self.handle_exceptions():
-            response_data = self.process_post_request(request)
-            return Response(
-                {"success": True, "data": response_data},
-                status=status.HTTP_201_CREATED
-            )
+        response_data = self.process_post_request(request)
+        return Response(
+            {"success": True, "data": response_data},
+            status=status.HTTP_200_OK
+        )
 
 
-class BaseGetView(BaseView):
+class BaseGetView(APIView):
     queryset = None
     service_class = None
 
+    @handle_exceptions
     def get(self, request, **kwargs):
-        with self.handle_exceptions():
-            data = self.service_class.get(request, **kwargs)
-            return Response({"success": True, "data": data}, status=status.HTTP_200_OK)
+        data = self.service_class.get(request, **kwargs)
+        return Response({"success": True, "data": data}, status=status.HTTP_200_OK)
