@@ -34,7 +34,8 @@ class UserService:
             "first_name": user.first_name,
             "last_name": user.last_name,
             "profile_image": str(user.profile_image.url) if user.profile_image else None,
-            "role": user.groups.first()
+            "role": user.groups.first().name,
+            "permissions": user.groups.first().permissions.values_list("codename", flat=True),
         }
         return data
 
@@ -54,20 +55,3 @@ class UserService:
         )
 
         return True
-
-
-class GroupService:
-
-    @staticmethod
-    def pre_modification(serializer):
-        try:
-            with transaction.atomic():
-                group = serializer.save()
-                group.permissions.clear()
-                for x in serializer.data["permissions"]:
-                    permission = Permission.objects.get(codename=x)
-                    group.permissions.add(permission)
-                return group
-        except IntegrityError:
-            transaction.set_rollback(True)
-            raise IntegrityError

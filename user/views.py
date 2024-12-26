@@ -1,10 +1,7 @@
 from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.views import APIView
+from rest_framework import status, views
 from rest_framework.permissions import AllowAny, DjangoModelPermissions, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework.pagination import LimitOffsetPagination
-from core.exceptions import handle_exceptions
 from core.views import (
     BaseListPaginateView,
     BaseListView,
@@ -13,15 +10,16 @@ from core.views import (
     BaseUpdateView,
     BaseUpdateStatusView
 )
-from user.services import UserService, GroupService
+from core.exceptions import handle_exceptions
+from user.services import UserService
 from user.models import User
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from user.filters import UserFilter
 from user.serializers import (
     LoginSerializer,
     UserSerializer,
-    UserListSerializer,
+    ProfileSerializer,
     ChangePasswordSerializer,
     PasswordResetRequestSerializer,
     PasswordResetSerializer,
@@ -45,48 +43,42 @@ class LoginView(TokenObtainPairView):
 
 
 class UserView(
-    APIView,
     BaseListPaginateView,
     BaseCreateView,
     BaseUpdateView,
     BaseUpdateStatusView
 ):
-    queryset = User.objects.all()
-    list_serializer_class = UserListSerializer
+    queryset = User.objects.all().exclude(is_superuser=True)
+    list_serializer_class = UserSerializer
     serializer_class = UserSerializer
     details_serializer_class = UserSerializer
-    permission_classes = [DjangoModelPermissions]
     filterset_class = UserFilter
+
+    def get_object(self, **kwargs):
+        return self.queryset.get(id=kwargs.get("id"))
 
     def get_permissions(self):
         if self.request.method == "POST":
-            self.permission_classes = [AllowAny, ]
+            self.permission_classes = [AllowAny]
         return super().get_permissions()
 
-class UserDetailView(BaseDetailView):
+
+class ProfileUpdateView(BaseUpdateView):
     queryset = User.objects.all()
-    serializer_class = UserSerializer
-
-
-class ProfileUpdateView(APIView):
-    serializer_class = UserListSerializer
+    serializer_class = ProfileSerializer
+    details_serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
 
-    @handle_exceptions
-    def patch(self, request, *args, **kwargs):
-        user = request.user
-        serializer = self.serializer_class(user, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
+    def get_object(self, **kwargs):
+        return self.request.user
 
 
-class ChangePasswordView(APIView):
+class ChangePasswordView(views.APIView):
     serializer_class = ChangePasswordSerializer
     permission_classes = [IsAuthenticated]
 
     @handle_exceptions
-    def post(self, request, *args, **kwargs):
+    def put(self, request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         user = request.user
@@ -95,44 +87,49 @@ class ChangePasswordView(APIView):
         return Response({"success": True}, status=status.HTTP_200_OK)
 
 
-class PasswordResetRequestView(APIView):
+class PasswordResetRequestView(BaseCreateView):
     serializer_class = PasswordResetRequestSerializer
     service_class = UserService
+    permission_classes = [AllowAny]
 
-    @handle_exceptions
-    def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
+    def process_post_request(self, serializer):
+        """
+        Handles password reset request logic.
+        """
         self.service_class.send_password_reset_email(serializer.validated_data['email'])
-        return Response({"success": True}, status=status.HTTP_200_OK)
+        return {"success": True}
 
 
-class PasswordResetView(APIView):
+class PasswordResetView(BaseCreateView):
     serializer_class = PasswordResetSerializer
-
-    @handle_exceptions
-    def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response({"success": True}, status=status.HTTP_200_OK)
+    permission_classes = [AllowAny]
 
 
 class GroupView(
-    APIView,
     BaseListView,
     BaseCreateView,
     BaseUpdateView,
     BaseUpdateStatusView
 ):
-    queryset = Group.objects.all().order_by("-id")
+    queryset = Group.objects.all()
     list_serializer_class = GroupListSerializer
     serializer_class = GroupSerializer
-    details_serializer_class = GroupListSerializer
-    permission_classes = [DjangoModelPermissions]
-    service_class = GroupService
+    details_serializer_class = GroupDetailsSerializer
 
 
 class GroupDetailView(BaseDetailView):
     queryset = Group.objects.all()
     serializer_class = GroupDetailsSerializer
+
+
+class PermissionView(views.APIView):
+    queryset = ContentType.objects.all().exclude(model__in=['logentry', 'permission', 'session', 'contenttype'])
+
+    def get(self, request):
+        permission_list = []
+        content_types = self.queryset.all()
+        for i in content_types:
+            groupPermission = Permission.objects.filter(content_type=i.id).values('name', 'codename')
+            permission_list.append({i.model: groupPermission})
+
+        return Response({"success": True, "data": permission_list}, status=status.HTTP_200_OK)

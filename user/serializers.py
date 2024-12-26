@@ -15,6 +15,11 @@ class LoginSerializer(serializers.Serializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    groups = serializers.SerializerMethodField()
+
+    def get_groups(self, obj):
+        group_name = obj.groups.first().name
+        return group_name
 
     class Meta:
         model = User
@@ -28,7 +33,7 @@ class UserSerializer(serializers.ModelSerializer):
         return super(UserSerializer, self).create(validated_data)
 
 
-class UserListSerializer(serializers.ModelSerializer):
+class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('first_name', 'last_name', 'username', 'email', 'phone', 'profile_image')
@@ -107,26 +112,55 @@ class GroupListSerializer(serializers.ModelSerializer):
 
 
 class GroupDetailsSerializer(serializers.ModelSerializer):
-    permissions = PermissionListSerializer(many=True, read_only=True)
+    permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = Group
         fields = ["name", "permissions"]
 
+    def get_permissions(self, obj):
+        """
+        Returns the list of codenames for the permissions associated with the group.
+        """
+        return [permission.codename for permission in obj.permissions.all()]
 
-class GroupSerializer(serializers.Serializer):
+
+class GroupSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(required=True)
     permissions = serializers.ListField(child=serializers.CharField(), required=True)
+
+    class Meta:
+        model = Group
+        fields = ["id", "name", "permissions"]
 
     def validate_name(self, value):
         if Group.objects.filter(name=value).exists():
             raise serializers.ValidationError("Group with this name already exists.")
         return value
 
-    def validate_permissions(self, value):
-        if not Permission.objects.filter(codename__in=value).exists():
-            raise serializers.ValidationError("Invalid permission IDs.")
-        return value
+    def create(self, validated_data):
+        """
+        Custom create method to handle group creation and assign permissions.
+        """
+        permissions = validated_data.pop('permissions', [])
+        group = Group.objects.create(**validated_data)
 
-    class Meta:
-        model = Group
-        fields = ["name", "permissions"]
+        # Assign permissions to the group
+        permission_objects = Permission.objects.filter(codename__in=permissions)
+        group.permissions.set(permission_objects)
+
+        return group
+
+    def update(self, instance, validated_data):
+        """
+        Custom update method to handle updating group and assigning permissions.
+        """
+        permissions = validated_data.pop('permissions', [])
+
+        # Update the group fields using the validated data
+        group = super().update(instance, validated_data)
+
+        # Assign permissions to the group
+        group.permissions.set(permissions)
+
+        return group
