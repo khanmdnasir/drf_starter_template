@@ -1,111 +1,120 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.decorators import action
+from rest_framework.pagination import LimitOffsetPagination
 from core.exceptions import handle_exceptions
 
 
-class BaseModelView(APIView):
+class BaseViewMixin:
     queryset = None
-    serializer_class = None
-    service_class = None
+    list_serializer_class = None
     filterset_class = None
-    pagination_class = None
+    pagination_class = LimitOffsetPagination
 
-    def get_queryset(self):
+    def get_queryset(self, request=None):
         """
-        Returns a filtered and paginated queryset.
+        Returns a fresh queryset with optional filtering.
         """
         if self.queryset is None:
             raise AttributeError(f"{self.__class__.__name__} should include a `queryset` attribute.")
 
-        queryset = self.queryset
-        if self.filterset_class:
-            filterset = self.filterset_class(self.request.GET, queryset=queryset)
+        # Use .all() to avoid reusing cached results
+        queryset = self.queryset.all()
+
+        # Apply filtering if request and filterset_class are available
+        if request and self.filterset_class:
+            filterset = self.filterset_class(request.GET, queryset=queryset)
             return filterset.qs if hasattr(filterset, 'qs') else queryset
         return queryset
 
-    def paginate_queryset(self, queryset):
+    def paginate_queryset(self, request, queryset):
         """
         Paginates the queryset if a pagination class is defined.
         """
         paginator = self.pagination_class()
-        paginated_queryset = paginator.paginate_queryset(queryset, self.request)
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
         return paginator, paginated_queryset
 
+
+class BaseListPaginateView(BaseViewMixin, APIView):
     @handle_exceptions
-    def get(self, request, **kwargs):
+    def get(self, request, *args, **kwargs):
         """
         Handles GET requests with optional filtering and pagination.
         """
-        queryset = self.get_queryset()
-        if self.pagination_class:
-            paginator, paginated_queryset = self.paginate_queryset(queryset)
-            serializer = self.serializer_class(paginated_queryset, many=True)
-            return paginator.get_paginated_response(serializer.data)
+        queryset = self.get_queryset(request)  # Fresh queryset for every request
+        paginator, paginated_queryset = self.paginate_queryset(request, queryset)
+        serializer = self.list_serializer_class(paginated_queryset, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
-        serializer = self.serializer_class(queryset, many=True)
+
+class BaseListView(BaseViewMixin, APIView):
+    @handle_exceptions
+    def get(self, request, *args, **kwargs):
+        """
+        Handles GET requests with optional filtering.
+        """
+        queryset = self.get_queryset(request)  # Fresh queryset for every request
+        serializer = self.list_serializer_class(queryset, many=True)
         return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
 
-    def process_post_request(self, request):
+
+class BaseCreateView(APIView):
+    serializer_class = None
+    details_serializer_class = None
+    service_class = None
+
+    def process_post_request(self, serializer):
         """
-        Handles the core logic for processing post requests.
+        Handles the core logic for creating or modifying an instance.
         """
-        # Pre-modification
-        if self.service_class and hasattr(self.service_class, 'pre_modification'):
-            data = self.service_class.pre_modification(request)
-        else:
-            data = request.data
-
-        # Serializer Validation
-        serializer = self.serializer_class(data=data)
-        serializer.is_valid(raise_exception=True)
-
-        # Save the object
-        serializer.save()
-
-        # Post-modification
-        if self.service_class and hasattr(self.service_class, 'post_modification'):
-            return self.service_class.post_modification(serializer.data)
-        else:
-            return serializer.data
+        instance = serializer.save()
+        data = self.details_serializer_class(instance).data
+        if self.service_class and hasattr(self.service_class, "post_modification"):
+            return self.service_class.post_modification(data)
+        return data
 
     @handle_exceptions
     def post(self, request, **kwargs):
-        """
-        Handles POST requests.
-        """
-        response_data = self.process_post_request(request)
-        return Response(
-            {"success": True, "data": response_data},
-            status=status.HTTP_201_CREATED
-        )
-
-    def process_patch_request(self, instance, request):
-        """
-        Handles the core logic for processing post requests.
-        """
-        # Serializer Validation
-        serializer = self.serializer_class(instance, data=request.data, partial=True)
+        serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
+        response_data = self.process_post_request(serializer)
+        return Response({"success": True, "data": response_data}, status=status.HTTP_201_CREATED)
 
-        # Save the object
-        serializer.save()
 
-        # Post-modification
-        return serializer.data
+class BaseUpdateView(APIView):
+    queryset = None
+    serializer_class = None
+    details_serializer_class = None
+    service_class = None
+
+    def process_patch_request(self, serializer):
+        """
+        Handles the core logic for updating an instance.
+        """
+        updated_instance = serializer.save()
+        data = self.details_serializer_class(updated_instance).data
+        if self.service_class and hasattr(self.service_class, "post_modification"):
+            return self.service_class.post_modification(data)
+        return data
+
+    def get_object(self, **kwargs):
+        """
+        Override this method in subclasses to return the specific object to update.
+        """
+        raise NotImplementedError("Subclasses must implement the `get_object` method.")
 
     @handle_exceptions
-    def patch(self, request, **kwargs):
-        """
-        Handles PUT requests.
-        """
-        instance = self.queryset.get(id=kwargs.get("id"))
-        response_data = self.process_patch_request(instance, request)
-        return Response(
-            {"success": True, "data": response_data},
-            status=status.HTTP_201_CREATED
-        )
+    def put(self, request, **kwargs):
+        instance = self.get_object(**kwargs)
+        serializer = self.serializer_class(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        response_data = self.process_patch_request(serializer)
+        return Response({"success": True, "data": response_data}, status=status.HTTP_200_OK)
+
+
+class BaseDeleteView(APIView):
+    queryset = None
 
     @handle_exceptions
     def delete(self, request, **kwargs):
@@ -113,10 +122,13 @@ class BaseModelView(APIView):
         instance.delete()
         return Response({"success": True}, status=status.HTTP_200_OK)
 
-    @action(methods=['patch'], detail=True, url_path='update-status')
+
+class BaseUpdateStatusView(APIView):
+    queryset = None
+
     @handle_exceptions
-    def update_status(self, request, pk):
-        instance = self.queryset.get(id=pk)
+    def patch(self, request, **kwargs):
+        instance = self.queryset.get(id=kwargs.get("id"))
         instance.is_active = not instance.is_active
         instance.save()
         return Response({"success": True}, status=status.HTTP_200_OK)
@@ -131,50 +143,3 @@ class BaseDetailView(APIView):
         instance = self.queryset.get(id=kwargs.get("id"))
         serializer = self.serializer_class(instance)
         return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
-
-
-class BasePostView(APIView):
-    queryset = None
-    serializer_class = None
-    service_class = None
-
-    def process_post_request(self, request):
-        """
-        Handles the core logic for processing post requests.
-        """
-        # Pre-modification
-        if self.service_class and hasattr(self.service_class, 'pre_modification'):
-            data = self.service_class.pre_modification(request)
-        else:
-            data = request.data
-
-        # Serializer Validation
-        serializer = self.serializer_class(data=data)
-        serializer.is_valid(raise_exception=True)
-
-        # Save the object
-        serializer.save()
-
-        # Post-modification
-        if self.service_class and hasattr(self.service_class, 'post_modification'):
-            return self.service_class.post_modification(serializer.data)
-        else:
-            return serializer.data
-
-    @handle_exceptions
-    def post(self, request, **kwargs):
-        response_data = self.process_post_request(request)
-        return Response(
-            {"success": True, "data": response_data},
-            status=status.HTTP_200_OK
-        )
-
-
-class BaseGetView(APIView):
-    queryset = None
-    service_class = None
-
-    @handle_exceptions
-    def get(self, request, **kwargs):
-        data = self.service_class.get(request, **kwargs)
-        return Response({"success": True, "data": data}, status=status.HTTP_200_OK)

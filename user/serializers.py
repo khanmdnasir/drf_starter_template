@@ -5,6 +5,7 @@ from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from rest_framework import serializers
+from django.contrib.auth.models import Permission, Group
 from user.models import User
 
 
@@ -14,10 +15,16 @@ class LoginSerializer(serializers.Serializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    groups = serializers.SerializerMethodField()
+
+    def get_groups(self, obj):
+        group_name = obj.groups.first().name
+        return group_name
+
     class Meta:
         model = User
         read_only_fields = ["is_superuser"]
-        exclude = ['groups', 'user_permissions']
+        exclude = ['user_permissions']
         extra_kwargs = {'password': {'write_only': True}, 'first_name': {'required': True},
                         'last_name': {'required': True}}
 
@@ -90,3 +97,70 @@ class PasswordResetSerializer(serializers.Serializer):
         new_password = self.validated_data['new_password']
         user.set_password(new_password)
         user.save()
+
+
+class PermissionListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Permission
+        fields = '__all__'
+
+
+class GroupListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = ['id', 'name']
+
+
+class GroupDetailsSerializer(serializers.ModelSerializer):
+    permissions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Group
+        fields = ["name", "permissions"]
+
+    def get_permissions(self, obj):
+        """
+        Returns the list of codenames for the permissions associated with the group.
+        """
+        return [permission.codename for permission in obj.permissions.all()]
+
+
+class GroupSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(required=True)
+    permissions = serializers.ListField(child=serializers.CharField(), required=True)
+
+    class Meta:
+        model = Group
+        fields = ["id", "name", "permissions"]
+
+    def validate_name(self, value):
+        if Group.objects.filter(name=value).exists():
+            raise serializers.ValidationError("Group with this name already exists.")
+        return value
+
+    def create(self, validated_data):
+        """
+        Custom create method to handle group creation and assign permissions.
+        """
+        permissions = validated_data.pop('permissions', [])
+        group = Group.objects.create(**validated_data)
+
+        # Assign permissions to the group
+        permission_objects = Permission.objects.filter(codename__in=permissions)
+        group.permissions.set(permission_objects)
+
+        return group
+
+    def update(self, instance, validated_data):
+        """
+        Custom update method to handle updating group and assigning permissions.
+        """
+        permissions = validated_data.pop('permissions', [])
+
+        # Update the group fields using the validated data
+        group = super().update(instance, validated_data)
+
+        # Assign permissions to the group
+        group.permissions.set(permissions)
+
+        return group

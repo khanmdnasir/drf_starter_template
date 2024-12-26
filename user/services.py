@@ -5,6 +5,8 @@ from django.core.mail import send_mail
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
+from django.contrib.auth.models import Permission
+from django.db import IntegrityError, transaction
 from django.conf import settings
 from core.exceptions import CustomException
 from user.models import User
@@ -31,7 +33,9 @@ class UserService:
             "email": user.email,
             "first_name": user.first_name,
             "last_name": user.last_name,
-            "profile_image": str(user.profile_image.url) if user.profile_image else None
+            "profile_image": str(user.profile_image.url) if user.profile_image else None,
+            "role": user.groups.first().name,
+            "permissions": user.groups.first().permissions.values_list("codename", flat=True),
         }
         return data
 
