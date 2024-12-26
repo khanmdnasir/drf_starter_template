@@ -43,7 +43,6 @@ def handle_exceptions(func):
                 status=e.status_code,
             )
         except Exception as e:
-            print(str(e))
             return Response(
                 {
                     "success": False,

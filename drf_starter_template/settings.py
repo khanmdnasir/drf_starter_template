@@ -141,6 +141,14 @@ AUTH_PASSWORD_VALIDATORS = [
 # for authentication
 AUTH_USER_MODEL = "user.User"
 REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',  # For unauthenticated users
+        'rest_framework.throttling.UserRateThrottle',  # For authenticated users
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '10/min',   # 10 requests per minute for anonymous users
+        'user': '100/hour',  # 100 requests per hour for authenticated users
+    },
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.DjangoModelPermissions'
     ],
@@ -182,6 +190,15 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
+
+
+# Email settings
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND')
+EMAIL_USE_TLS = True
+EMAIL_HOST = os.environ.get('EMAIL_HOST')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+EMAIL_PORT = os.environ.get('EMAIL_PORT')
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/

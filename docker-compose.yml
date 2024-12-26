@@ -1,0 +1,44 @@
+version: '3.7'
+services:
+  pgdb:
+    image: postgres:14.1-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data/
+
+
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "${PGADMIN_PORT}:80"
+    volumes:
+      - ./pgadmin_data:/var/lib/pgadmin/data/
+    depends_on:
+      - pgdb
+
+
+  backend:
+    build:
+      context: .
+    container_name: base_backend
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - static_volume:/app/static
+    ports:
+      - "${WEB_PORT}:8000"
+    depends_on:
+      - pgdb
+
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+  static_volume:
