@@ -5,6 +5,8 @@ from django.core.mail import send_mail
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
+from django.contrib.auth.models import Permission
+from django.db import IntegrityError, transaction
 from django.conf import settings
 from core.exceptions import CustomException
 from user.models import User
@@ -31,7 +33,8 @@ class UserService:
             "email": user.email,
             "first_name": user.first_name,
             "last_name": user.last_name,
-            "profile_image": str(user.profile_image.url) if user.profile_image else None
+            "profile_image": str(user.profile_image.url) if user.profile_image else None,
+            "role": user.groups.first()
         }
         return data
 
@@ -51,3 +54,20 @@ class UserService:
         )
 
         return True
+
+
+class GroupService:
+
+    @staticmethod
+    def pre_modification(serializer):
+        try:
+            with transaction.atomic():
+                group = serializer.save()
+                group.permissions.clear()
+                for x in serializer.data["permissions"]:
+                    permission = Permission.objects.get(codename=x)
+                    group.permissions.add(permission)
+                return group
+        except IntegrityError:
+            transaction.set_rollback(True)
+            raise IntegrityError

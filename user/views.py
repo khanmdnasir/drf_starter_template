@@ -1,22 +1,33 @@
 from rest_framework.response import Response
-from rest_framework import status, views
+from rest_framework import status
+from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, DjangoModelPermissions, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.pagination import LimitOffsetPagination
 from core.exceptions import handle_exceptions
 from core.views import (
-    BaseModelView
+    BaseListPaginateView,
+    BaseListView,
+    BaseDetailView,
+    BaseCreateView,
+    BaseUpdateView,
+    BaseUpdateStatusView
 )
-from user.services import UserService
+from user.services import UserService, GroupService
 from user.models import User
+from django.contrib.auth.models import Group
+from django.contrib.contenttypes.models import ContentType
 from user.filters import UserFilter
 from user.serializers import (
     LoginSerializer,
     UserSerializer,
-    ProfileSerializer,
+    UserListSerializer,
     ChangePasswordSerializer,
     PasswordResetRequestSerializer,
-    PasswordResetSerializer
+    PasswordResetSerializer,
+    GroupSerializer,
+    GroupListSerializer,
+    GroupDetailsSerializer
 )
 
 
@@ -33,21 +44,32 @@ class LoginView(TokenObtainPairView):
         return Response({"success": True, "data": data}, status=status.HTTP_200_OK)
 
 
-class UserView(BaseModelView):
+class UserView(
+    APIView,
+    BaseListPaginateView,
+    BaseCreateView,
+    BaseUpdateView,
+    BaseUpdateStatusView
+):
     queryset = User.objects.all()
+    list_serializer_class = UserListSerializer
     serializer_class = UserSerializer
+    details_serializer_class = UserSerializer
     permission_classes = [DjangoModelPermissions]
     filterset_class = UserFilter
-    pagination_class = LimitOffsetPagination
 
     def get_permissions(self):
         if self.request.method == "POST":
             self.permission_classes = [AllowAny, ]
         return super().get_permissions()
 
+class UserDetailView(BaseDetailView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
 
-class ProfileUpdateView(views.APIView):
-    serializer_class = ProfileSerializer
+
+class ProfileUpdateView(APIView):
+    serializer_class = UserListSerializer
     permission_classes = [IsAuthenticated]
 
     @handle_exceptions
@@ -59,7 +81,7 @@ class ProfileUpdateView(views.APIView):
         return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
 
 
-class ChangePasswordView(views.APIView):
+class ChangePasswordView(APIView):
     serializer_class = ChangePasswordSerializer
     permission_classes = [IsAuthenticated]
 
@@ -73,7 +95,7 @@ class ChangePasswordView(views.APIView):
         return Response({"success": True}, status=status.HTTP_200_OK)
 
 
-class PasswordResetRequestView(views.APIView):
+class PasswordResetRequestView(APIView):
     serializer_class = PasswordResetRequestSerializer
     service_class = UserService
 
@@ -85,7 +107,7 @@ class PasswordResetRequestView(views.APIView):
         return Response({"success": True}, status=status.HTTP_200_OK)
 
 
-class PasswordResetView(views.APIView):
+class PasswordResetView(APIView):
     serializer_class = PasswordResetSerializer
 
     @handle_exceptions
@@ -95,3 +117,22 @@ class PasswordResetView(views.APIView):
         serializer.save()
         return Response({"success": True}, status=status.HTTP_200_OK)
 
+
+class GroupView(
+    APIView,
+    BaseListView,
+    BaseCreateView,
+    BaseUpdateView,
+    BaseUpdateStatusView
+):
+    queryset = Group.objects.all().order_by("-id")
+    list_serializer_class = GroupListSerializer
+    serializer_class = GroupSerializer
+    details_serializer_class = GroupListSerializer
+    permission_classes = [DjangoModelPermissions]
+    service_class = GroupService
+
+
+class GroupDetailView(BaseDetailView):
+    queryset = Group.objects.all()
+    serializer_class = GroupDetailsSerializer
