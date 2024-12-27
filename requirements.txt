@@ -24,7 +24,33 @@ djangorestframework-simplejwt
 # for image
 Pillow
 
-# extra
+# for celery
+celery
+redis
+django-celery-beat
+django-celery-results
+
+# for channels
+'channels[daphne]'
+
+# for backup
+django-dbbackup
+
+# for aws s3
+boto3
+django-storages
+
+# for logger and monitoring
+sentry-sdk
+
+# for user activity log
+django-user-activity-log
+
+# for run custom command
 django-extensions
+
+# for filter
 django-filter
+
+# for reversion model
 django-reversion

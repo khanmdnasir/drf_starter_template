@@ -48,7 +48,7 @@ class UserView(
     BaseUpdateView,
     BaseUpdateStatusView
 ):
-    queryset = User.objects.all().exclude(is_superuser=True)
+    queryset = User.objects.all()
     list_serializer_class = UserSerializer
     serializer_class = UserSerializer
     details_serializer_class = UserSerializer
@@ -61,6 +61,22 @@ class UserView(
         if self.request.method == "POST":
             self.permission_classes = [AllowAny]
         return super().get_permissions()
+
+    def get_queryset(self, request=None):
+        """
+        Returns a fresh queryset with optional filtering.
+        """
+        if self.queryset is None:
+            raise AttributeError(f"{self.__class__.__name__} should include a `queryset` attribute.")
+
+        # Use .all() to avoid reusing cached results
+        queryset = self.queryset.all().exclude(is_superuser=True, id=self.request.user.id)
+
+        # Apply filtering if request and filterset_class are available
+        if request and self.filterset_class:
+            filterset = self.filterset_class(request.GET, queryset=queryset)
+            return filterset.qs if hasattr(filterset, 'qs') else queryset
+        return queryset
 
 
 class ProfileUpdateView(BaseUpdateView):
