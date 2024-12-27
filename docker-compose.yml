@@ -37,6 +37,36 @@ services:
     depends_on:
       - pgdb
 
+  redis:
+    image: redis
+    ports:
+      - "${REDIS_PORT}:6379"
+
+  celery_worker:
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A main worker -l info
+    volumes:
+      - .:/app
+    depends_on:
+      - backend
+      - redis
+
+  celery_beat_schedular:
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A main beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - .:/app
+    depends_on:
+      - backend
+      - redis
+      - celery_worker
+
 
 volumes:
   postgres_data:

@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
 
 load_dotenv()
 
@@ -40,19 +42,26 @@ else:
 # Application definition
 
 DEFAULT_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
 ]
 
 THIRD_PARTY_APPS = [
+    "daphne", # for websocket
     "rest_framework",
     "corsheaders",
     "django_filters",
-    "phonenumber_field"
+    "phonenumber_field",
+    "django_celery_beat", # for celery
+    "django_celery_results", # for celery
+    "dbbackup", # for backup
+    "user_activity_log", # for activity log
+    "django_extensions", # for shell
+    "reversion" # for reversion
 ]
 
 LOCAL_APPS = [
@@ -73,6 +82,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'user_activity_log.middleware.UserActivityLogMiddleware', # for activity log
 ]
 
 ROOT_URLCONF = 'drf_starter_template.urls'
@@ -94,6 +104,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'drf_starter_template.wsgi.application'
+ASGI_APPLICATION = 'drf_starter_template.asgi.application'
 
 
 # Database
@@ -118,6 +129,13 @@ NOSQL_SETTINGS = {
     "db_cluster_url": os.getenv("NOSQL_DB_CLUSTER_URL"),
 }
 
+# Redis caching
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': f'redis://{os.environ.get("REDIS_URL")}:6379/1',
+    }
+}
 
 
 # Password validation
@@ -211,6 +229,28 @@ USE_I18N = True
 
 USE_TZ = True
 
+# Celery settings
+CELERY_BROKER_URL = f'redis://{os.environ.get("REDIS_URL")}:6379'
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_ACCEPT_CONTENT = ['application/json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Asia/Dhaka'
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+if DEBUG:
+    CELERY_TASK_ALWAYS_EAGER = True
+
+# Channels
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [(os.environ.get('REDIS_URL'), 6379)],
+        },
+    },
+}
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
@@ -221,9 +261,39 @@ STATIC_URL = "static/"
 MEDIA_ROOT = BASE_DIR / "files-storage"
 MEDIA_URL = "/files-storage/"
 
+if os.environ['DEBUG'] != 'TRUE':
+    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_DEFAULT_ACL = None
+    AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME')
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
+
+if os.environ['DEBUG'] == 'TRUE':
+    DBBACKUP_STORAGE = 'django.core.files.storage.FileSystemStorage'
+    DBBACKUP_STORAGE_OPTIONS = {'location': BASE_DIR / 'dbbackup'}
+else:
+    DBBACKUP_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    DBBACKUP_STORAGE_OPTIONS = {
+        'access_key': os.environ.get('AWS_ACCESS_KEY_ID'),
+        'secret_key': os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        'bucket_name': os.environ.get('AWS_STORAGE_BUCKET_NAME'),
+        'default_acl': 'private',
+    }
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 FRONTEND_URL = os.getenv("FRONTEND_URL")
+
+# Sentry settings
+sentry_sdk.init(
+    dsn="https://<PUBLIC_KEY>@o<ORG_ID>.ingest.sentry.io/<PROJECT_ID>",
+    integrations=[DjangoIntegration()],
+    traces_sample_rate=1.0,  # Set sampling rate for performance monitoring (1.0 = 100%)
+    send_default_pii=True,  # Sends personally identifiable information (PII) like user and IP (if logged in)
+)
